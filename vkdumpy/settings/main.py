@@ -1,14 +1,12 @@
-import os
 import logging
-
+import os
 from os.path import abspath, dirname, join, basename
-from datetime import timedelta
 
 RAISE_WAITING_EXCEPTION = False  # if false then sleep
-WAITING_BETWEEN_REQUESTS = 1.3
+WAITING_BETWEEN_REQUESTS = 0.4
 
 ROOT_DIR = dirname(dirname(abspath(__file__)))
-VK_SCRIPTS_DIR = join(ROOT_DIR, 'vk-execute-scripts')
+VK_SCRIPTS_DIR = join(ROOT_DIR, 'execute-scripts')
 VK_EXECUTE_SCRIPTS = {}
 
 for file_name in os.listdir(VK_SCRIPTS_DIR):
@@ -17,10 +15,9 @@ for file_name in os.listdir(VK_SCRIPTS_DIR):
             basename(file_name).replace('.js', ''): file.read().replace('\n', ' ')
         })
 
-VK_API_VERSION = '5.103'
+VK_API_VERSION = '5.120'
 
 logging.basicConfig(level=logging.INFO)
-logger = logging
 
 try:
     from .local import *

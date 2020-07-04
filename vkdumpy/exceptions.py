@@ -2,12 +2,13 @@ from requests.exceptions import RequestException
 
 
 class VkDumpyWaitException(Exception):
-    def __init__(self, calling_method_name, time_to_wait):
-        self.calling_method_name = calling_method_name
+    def __init__(self, method_part, hash_code, time_to_wait):
+        self.method_part = method_part
+        self.hash_code = hash_code
         self.time_to_wait = time_to_wait
 
     def __str__(self):
-        return f'You need to wait {self.time_to_wait} seconds for {self.calling_method_name}'
+        return f'You need to wait {self.time_to_wait} seconds for {self.method_part} [{self.hash_code}]'
 
 
 class VkDumpyRequestException(RequestException):
