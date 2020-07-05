@@ -1,25 +1,38 @@
 import logging
 import os
-from os.path import abspath, dirname, join, basename
+import sysconfig
+from collections import defaultdict
+from pathlib import Path
 
-RAISE_WAITING_EXCEPTION = False  # if false then sleep
-WAITING_BETWEEN_REQUESTS = 0.4
+import pkg_resources
 
-ROOT_DIR = dirname(dirname(abspath(__file__)))
-VK_SCRIPTS_DIR = join(ROOT_DIR, 'execute-scripts')
-VK_EXECUTE_SCRIPTS = {}
+from vkdumpy.exceptions import VkDumpyConfigException
 
-for file_name in os.listdir(VK_SCRIPTS_DIR):
-    with open(join(VK_SCRIPTS_DIR, file_name), 'r') as file:
-        VK_EXECUTE_SCRIPTS.update({
-            basename(file_name).replace('.js', ''): file.read().replace('\n', ' ')
-        })
+RAISE_WAITING_EXCEPTION: bool = os.environ.get('VKDUMPY_RAISE_WAITING_EXCEPTION', 'false') \
+                                    .casefold().strip() == 'true'  # if false then sleep
 
-VK_API_VERSION = '5.120'
+_waiting = os.environ.get(
+    'VKDUMPY_WAITING_BETWEEN_REQUESTS',
+    '0.4'
+).casefold().strip()
+assert _waiting.isdecimal() or _waiting.replace('.', '').isdecimal() \
+       and _waiting.count('.') < 2 and _waiting.index('.') != len(_waiting) - 1, \
+    VkDumpyConfigException('VKDUMPY_WAITING_BETWEEN_REQUESTS must be float')
+
+WAITING_BETWEEN_REQUESTS: float = float(_waiting)
+del _waiting
+
+# if vkdumpy use as python lib
+if 'vkdumpy' in {pkg.key for pkg in pkg_resources.working_set}:
+    BASE_DIR = sysconfig.get_paths()['purelib']
+else:
+    BASE_DIR = Path(os.path.abspath(__file__)).parent.parent.parent
+
+BASE_DIR: Path = BASE_DIR.joinpath('vkdumpy')
+
+VK_SCRIPTS_DIR: Path = BASE_DIR.joinpath('execute-scripts')
+VK_EXECUTE_SCRIPTS: dict = defaultdict(dict)
+
+VK_API_VERSION: str = '5.120'
 
 logging.basicConfig(level=logging.INFO)
-
-try:
-    from .local import *
-except ImportError:
-    pass

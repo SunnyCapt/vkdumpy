@@ -74,11 +74,22 @@ class VkExecutor(WaitController):
             raise VkDumpyExecuteException(error_msg)
 
     @classmethod
-    def generate_getConversations_executor(cls, **kwargs) -> 'VkExecutor':
+    def generate_getConversations_executor(cls, extended: bool, **kwargs) -> 'VkExecutor':
         kwargs.update({'v': '5.120', 'count': 200})
-        code = VK_EXECUTE_SCRIPTS['get_dialogs'] \
+        code = VK_EXECUTE_SCRIPTS['messages']['getConversations'] \
             .replace('{{API_VERSION}}', VK_API_VERSION) \
-            .replace('\'{{KwARGS}}\'', str(kwargs))
+            .replace('\'{{KWARGS}}\'', str(kwargs)) \
+            .replace('\'{{EXTENDED}}\'', str(extended).lower())
+        return cls(code)
+
+    @classmethod
+    def generate_getHistory_executor(cls, peer_id: Union[str, int], start_message_id: int, offset: int,
+                                     **kwargs) -> 'VkExecutor':
+        kwargs.update({'peer_id': peer_id})
+        code = VK_EXECUTE_SCRIPTS['messages']['getHistory'] \
+            .replace('\'{{START_MESSAGE_ID}}\'', str(start_message_id)) \
+            .replace('\'{{OFFSET}}\'', str(offset)) \
+            .replace('\'{{KWARGS}}\'', str(kwargs))
         return cls(code)
 
 
@@ -87,33 +98,62 @@ class VkApi:
     def __init__(self, token):
         self._token = token
 
-    @log_start_finish('_token')
-    def get_conversations(self):
-        response = VkExecutor.generate_getConversations_executor().execute(self._token)
+    @log_start_finish(flag_field_name='_token')
+    def get_conversations(self, extended=False):
+        response = VkExecutor.generate_getConversations_executor(extended).execute(self._token)
         result = response['items']
 
         logger.info(
-            f'Getting conversations: {len(result)}/{response["count"]} '
+            f'Getting {"extended " if extended else ""}conversations: {len(result)}/{response["count"]} '
             f'[{stack()[0][3]}][{hash(self._token)}]'
         )
 
         while len(result) < response['count']:
             response = VkExecutor \
-                .generate_getConversations_executor(offset=len(result)) \
+                .generate_getConversations_executor(extended=extended, offset=len(result)) \
                 .execute(self._token)
             result += response['items']
 
             logger.info(
-                f'Getting conversations: {len(result)}/{response["count"]} '
+                f'Getting {"extended " if extended else ""}conversations: {len(result)}/{response["count"]} '
                 f'[{stack()[0][3]}][{hash(self._token)}]'
             )
 
         return result
 
+    @log_start_finish(flag_field_name='_token')
+    def get_history(self, peer_id: Union[int, str], start_message_id=-1):
+        response = VkExecutor.generate_getHistory_executor(
+            peer_id=peer_id,
+            offset=0,
+            start_message_id=start_message_id
+        ).execute(self._token)
+        result = response['items']
 
-if __name__ == '__main__':
-    import json
+        logger.info(
+            f'Getting dialog history with {peer_id}: {len(result)}/{response["count"]} '
+            f'[{stack()[0][3]}][{hash(self._token)}]'
+        )
 
-    api = VkApi(input('Enter vk token: '))
-    data = api.get_conversations()
-    print(json.dumps(data, sort_keys=True, indent=4, ensure_ascii=False))
+        while len(result) < response['count'] and result[-1]['id'] > start_message_id:
+            response = VkExecutor.generate_getHistory_executor(
+                peer_id=peer_id,
+                offset=len(result),
+                start_message_id=start_message_id
+            ).execute(self._token)
+            result += response['items']
+
+            logger.info(
+                f'Getting dialog history with {peer_id}: {len(result)}/{response["count"]} '
+                f'[{stack()[0][3]}][{hash(self._token)}]'
+            )
+
+        if start_message_id == -1:
+            return result
+
+        for i in range(len(result) - 1, -1, -1):
+            if result[i]['id'] >= start_message_id:
+                break
+            result.pop(i)
+
+        return result
