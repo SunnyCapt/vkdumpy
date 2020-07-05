@@ -3,6 +3,7 @@ from inspect import stack
 from json.decoder import JSONDecodeError
 from time import sleep, time
 from typing import Union
+from retry import retry
 
 import requests
 from requests import RequestException
@@ -47,6 +48,7 @@ class VkExecutor(WaitController):
     def __init__(self, code: str):
         self.code = code
 
+    @retry(tries=4, delay=2)
     def execute(self, token: str):
         hash_code = hash(token)
         self.wait_if_need('execute', hash_code)
