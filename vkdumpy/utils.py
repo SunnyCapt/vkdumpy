@@ -1,6 +1,8 @@
 import logging
 from functools import wraps
 
+from jinja2 import Template
+
 from vkdumpy.settings.main import VK_EXECUTE_SCRIPTS, VK_SCRIPTS_DIR
 
 logger = logging.getLogger(__name__)
@@ -33,5 +35,6 @@ def load_execute_scripts():
         for method in method_part.iterdir():
             with method.open() as file:
                 VK_EXECUTE_SCRIPTS[method.parent.name].update({
-                    method.name.replace(".js", ""): file.read().replace('\n', ' ')
+                    method.name.replace(".js", "")
+                    .replace(".jinja2", ""): Template(file.read().replace('\n', ' '))
                 })

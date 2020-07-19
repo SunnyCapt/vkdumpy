@@ -4,12 +4,13 @@ from json.decoder import JSONDecodeError
 from time import sleep, time
 from typing import Union
 from retry import retry
-
+import json
 import requests
 from requests import RequestException
 
 from vkdumpy.exceptions import VkDumpyWaitException, VkDumpyExecuteException
-from vkdumpy.settings.main import WAITING_BETWEEN_REQUESTS, RAISE_WAITING_EXCEPTION, VK_API_VERSION, VK_EXECUTE_SCRIPTS
+from vkdumpy.settings.main import WAITING_BETWEEN_REQUESTS, RAISE_WAITING_EXCEPTION, VK_API_VERSION,\
+    VK_EXECUTE_SCRIPTS, DEBUG
 from vkdumpy.utils import log_start_finish
 
 logger = logging.getLogger(__name__)
@@ -79,19 +80,36 @@ class VkExecutor(WaitController):
     def generate_getConversations_executor(cls, extended: bool, **kwargs) -> 'VkExecutor':
         kwargs.update({'v': '5.120', 'count': 200})
         code = VK_EXECUTE_SCRIPTS['messages']['getConversations'] \
-            .replace('{{API_VERSION}}', VK_API_VERSION) \
-            .replace('\'{{KWARGS}}\'', str(kwargs)) \
-            .replace('\'{{EXTENDED}}\'', str(extended).lower())
+            .render(
+                api_version=VK_API_VERSION,
+                kwargs=json.dumps(kwargs, ensure_ascii=False),
+                extended=str(extended).lower()
+            )
+
+        if DEBUG:
+            logger.info(f'Generated code: {code}')
+
         return cls(code)
 
     @classmethod
-    def generate_getHistory_executor(cls, peer_id: Union[str, int], start_message_id: int, offset: int,
-                                     **kwargs) -> 'VkExecutor':
+    def generate_getHistory_executor(
+            cls,
+            peer_id: Union[str, int],
+            start_message_id: int,
+            offset: int,
+            **kwargs
+    ) -> 'VkExecutor':
         kwargs.update({'peer_id': peer_id})
         code = VK_EXECUTE_SCRIPTS['messages']['getHistory'] \
-            .replace('\'{{START_MESSAGE_ID}}\'', str(start_message_id)) \
-            .replace('\'{{OFFSET}}\'', str(offset)) \
-            .replace('\'{{KWARGS}}\'', str(kwargs))
+            .render(
+                start_message_id=start_message_id,
+                offset=offset,
+                kwargs=json.dumps(kwargs, ensure_ascii=False)
+            )
+
+        if DEBUG:
+            logger.info(f'Generated code: {code}')
+
         return cls(code)
 
 

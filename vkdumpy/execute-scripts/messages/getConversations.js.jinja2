@@ -1,7 +1,7 @@
 var result = [];
-var extended = '{{EXTENDED}}';
-var apiVersion = '{{API_VERSION}}';
-var conversations = API.messages.getConversations('{{KWARGS}}');
+var extended = {{ extended }};
+var apiVersion = '{{ api_version }}';
+var conversations = API.messages.getConversations({{ kwargs }});
 
 var j = 0;
 while (j < conversations.items.length) {

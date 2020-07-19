@@ -3,8 +3,9 @@ import os
 import sysconfig
 from collections import defaultdict
 from pathlib import Path
-
+from typing import Dict
 import pkg_resources
+from jinja2 import Template
 
 from vkdumpy.exceptions import VkDumpyConfigException
 
@@ -31,8 +32,10 @@ else:
 BASE_DIR: Path = BASE_DIR.joinpath('vkdumpy')
 
 VK_SCRIPTS_DIR: Path = BASE_DIR.joinpath('execute-scripts')
-VK_EXECUTE_SCRIPTS: dict = defaultdict(dict)
+VK_EXECUTE_SCRIPTS: Dict[str, Dict[str, Template]] = defaultdict(dict)
 
 VK_API_VERSION: str = '5.120'
+
+DEBUG = True
 
 logging.basicConfig(level=logging.INFO)
