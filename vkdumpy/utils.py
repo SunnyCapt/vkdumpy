@@ -1,9 +1,11 @@
 import logging
+import time
 from functools import wraps
 
 from jinja2 import Template
+from vk.exceptions import VkAPIError
 
-from vkdumpy.settings.main import VK_EXECUTE_SCRIPTS, VK_SCRIPTS_DIR
+from vkdumpy.settings.main import VK_EXECUTE_SCRIPTS, VK_SCRIPTS_DIR, MAX_WAITING_BETWEEN_REQUESTS
 
 logger = logging.getLogger(__name__)
 
@@ -36,5 +38,28 @@ def load_execute_scripts():
             with method.open() as file:
                 VK_EXECUTE_SCRIPTS[method.parent.name].update({
                     method.name.replace(".js", "")
-                    .replace(".jinja2", ""): Template(file.read().replace('\n', ' '))
+                        .replace(".jinja2", ""): Template(file.read().replace('\n', ' '))
                 })
+
+
+def waiting(method_part, flag_name):
+    def inner_1(func):
+        @wraps(func)
+        def inner_2(self, *args, **kwwargs):
+            self.wait_if_need(method_part, getattr(self, flag_name))
+
+            try:
+                return func(self, *args, **kwwargs)
+            except VkAPIError as e:
+                if e.code == 6:
+                    logger.warning(
+                        f'WAITING_BETWEEN_REQUESTS is small, retrying: go to sleep {MAX_WAITING_BETWEEN_REQUESTS} secs'
+                    )
+                    time.sleep(MAX_WAITING_BETWEEN_REQUESTS)
+                else:
+                    raise e
+            return func(self, *args, **kwwargs)
+
+        return inner_2
+
+    return inner_1

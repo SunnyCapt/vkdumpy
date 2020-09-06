@@ -1,17 +1,21 @@
+import json
 import logging
 from inspect import stack
 from json.decoder import JSONDecodeError
 from time import sleep, time
-from typing import Union
-from retry import retry
-import json
+from typing import Union, List
+
 import requests
 from requests import RequestException
+from retry import retry
+from vk import API as ApiWrapper
+from vk import AuthSession as ApiWrapperAuthSession
+from vk.exceptions import VkAPIError
 
-from vkdumpy.exceptions import VkDumpyWaitException, VkDumpyExecuteException
-from vkdumpy.settings.main import WAITING_BETWEEN_REQUESTS, RAISE_WAITING_EXCEPTION, VK_API_VERSION,\
+from vkdumpy.exceptions import VkDumpyWaitException, VkDumpyExecuteException, VkDumpyRestApiException
+from vkdumpy.settings.main import WAITING_BETWEEN_REQUESTS, RAISE_WAITING_EXCEPTION, VK_API_VERSION, \
     VK_EXECUTE_SCRIPTS, DEBUG
-from vkdumpy.utils import log_start_finish
+from vkdumpy.utils import log_start_finish, waiting
 
 logger = logging.getLogger(__name__)
 
@@ -81,10 +85,10 @@ class VkExecutor(WaitController):
         kwargs.update({'v': '5.120', 'count': 200})
         code = VK_EXECUTE_SCRIPTS['messages']['getConversations'] \
             .render(
-                api_version=VK_API_VERSION,
-                kwargs=json.dumps(kwargs, ensure_ascii=False),
-                extended=str(extended).lower()
-            )
+            api_version=VK_API_VERSION,
+            kwargs=json.dumps(kwargs, ensure_ascii=False),
+            extended=str(extended).lower()
+        )
 
         if DEBUG:
             logger.info(f'Generated code: {code}')
@@ -102,10 +106,10 @@ class VkExecutor(WaitController):
         kwargs.update({'peer_id': peer_id})
         code = VK_EXECUTE_SCRIPTS['messages']['getHistory'] \
             .render(
-                start_message_id=start_message_id,
-                offset=offset,
-                kwargs=json.dumps(kwargs, ensure_ascii=False)
-            )
+            start_message_id=start_message_id,
+            offset=offset,
+            kwargs=json.dumps(kwargs, ensure_ascii=False)
+        )
 
         if DEBUG:
             logger.info(f'Generated code: {code}')
@@ -113,13 +117,32 @@ class VkExecutor(WaitController):
         return cls(code)
 
 
-class VkApi:
+class VkRestApi(WaitController):
+    def __init__(self, token):
+        self.api: ApiWrapper = ApiWrapper(ApiWrapperAuthSession(access_token=token))
+        self.hash = hash(token)
+
+    @waiting('messages', 'hash')
+    def get_init_long_pool_data(self, **kwargs):
+        return self.api.messages.getLongPollServer(need_pts=1, lp_version=3, v=VK_API_VERSION, **kwargs)
+
+    @waiting('messages', 'hash')
+    def get_long_poll_history(self, pts=None, **kwargs):
+        if pts is None:
+            init_info = self.api.messages.getLongPollServer(need_pts=1, lp_version=3, v=VK_API_VERSION, **kwargs)
+            pts = init_info['pts']
+            logger.info(f'Got pts: {pts}')
+
+        return self.api.messages.getLongPollHistory(pts=pts, v=VK_API_VERSION)
+
+
+class VKDumpy:
     # todo: run parallel
     def __init__(self, token):
         self._token = token
 
     @log_start_finish(flag_field_name='_token')
-    def get_conversations(self, extended=False):
+    def get_conversations(self, extended=False) -> List[int]:
         response = VkExecutor.generate_getConversations_executor(extended).execute(self._token)
         result = response['items']
 
@@ -142,7 +165,7 @@ class VkApi:
         return result
 
     @log_start_finish(flag_field_name='_token')
-    def get_history(self, peer_id: Union[int, str], start_message_id=-1):
+    def get_history(self, peer_id: Union[int, str], start_message_id=-1) -> List[dict]:
         response = VkExecutor.generate_getHistory_executor(
             peer_id=peer_id,
             offset=0,
@@ -177,3 +200,42 @@ class VkApi:
             result.pop(i)
 
         return result
+
+    @log_start_finish(flag_field_name='_token')
+    def get_deleted_messages(self) -> List[dict]:
+        """
+        Returns today deleted messages sorted by date
+        """
+
+        vk_resp_api = VkRestApi(self._token)
+
+        min_pts = vk_resp_api.get_init_long_pool_data()['pts']
+        results = []
+        deleted_msgs = []
+
+        while True:
+            logger.info(
+                f'Try to find minimal pts for getting deleted messages: now minimal pts is {min_pts} [{stack()[0][3]}][{hash(self._token)}]'
+            )
+            try:
+                lp_history = vk_resp_api.get_long_poll_history(pts=min_pts)
+            except Exception as e:
+                if isinstance(e, VkAPIError) and e.code == 907:
+                    break
+                err_msg = f'Can not get_deleted_messages: {e}'
+                logger.error(err_msg)
+                raise VkDumpyRestApiException(err_msg)
+
+            min_pts -= 1000
+
+            if lp_history.get('messages', {}).get('items', []):
+                results.append(lp_history)
+
+        for result in results:
+            deleted_msgs += [m for m in result['messages']['items'] if m.get('deleted')]
+
+        logger.info(
+            f'Found {len(deleted_msgs)} messages [{stack()[0][3]}][{hash(self._token)}]'
+        )
+
+        return sorted(deleted_msgs, key=lambda m: m['date'])

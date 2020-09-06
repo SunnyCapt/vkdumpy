@@ -4,6 +4,7 @@ import sysconfig
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict
+
 import pkg_resources
 from jinja2 import Template
 
@@ -14,13 +15,25 @@ RAISE_WAITING_EXCEPTION: bool = os.environ.get('VKDUMPY_RAISE_WAITING_EXCEPTION'
 
 _waiting = os.environ.get(
     'VKDUMPY_WAITING_BETWEEN_REQUESTS',
-    '0.4'
+    '0.7'
 ).casefold().strip()
 assert _waiting.isdecimal() or _waiting.replace('.', '').isdecimal() \
-       and _waiting.count('.') < 2 and _waiting.index('.') != len(_waiting) - 1, \
+       and len(_waiting.strip('.')) == len(_waiting), \
     VkDumpyConfigException('VKDUMPY_WAITING_BETWEEN_REQUESTS must be float')
 
 WAITING_BETWEEN_REQUESTS: float = float(_waiting)
+del _waiting
+
+_waiting = os.environ.get(
+    'VKDUMPY_MAX_WAITING_BETWEEN_REQUESTS',
+    '10'
+).casefold().strip()
+
+assert _waiting.isdecimal() or _waiting.replace('.', '').isdecimal() \
+       and len(_waiting.strip('.')) == len(_waiting), \
+    VkDumpyConfigException('VKDUMPY_WAITING_BETWEEN_REQUESTS must be float')
+
+MAX_WAITING_BETWEEN_REQUESTS: float = float(_waiting)
 del _waiting
 
 # if vkdumpy use as python lib
@@ -38,4 +51,4 @@ VK_API_VERSION: str = '5.120'
 
 DEBUG = True
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] - %(levelname)s - %(name)s:%(lineno)d - %(message)s')

@@ -23,5 +23,9 @@ class VkDumpyExecuteException(VkDumpyRequestException):
     pass
 
 
+class VkDumpyRestApiException(VkDumpyRequestException):
+    pass
+
+
 class VkDumpyConfigException(VkDumpyException):
     pass
