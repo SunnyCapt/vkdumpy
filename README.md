@@ -3,5 +3,6 @@
 Python lib to dump vk messages
 
 ### Dump all messages
-1. pip install -r requirements.txt
-2. python -m vkdumpy
+1. git clone https://github.com/SunnyCapt/vkdumpy.git vkd && cd vkd
+1. pip3 install -r requirements.txt
+2. python3 -m vkdumpy
